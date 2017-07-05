@@ -12,23 +12,31 @@ class ChatServer
 		super(host, port)
 	end
 
-	def connection_start(ws_conn, message)
-		room_id = message
-		session_id = SecureRandom.hex
+	def msg_request(msg, sid)
+		if (@redis.get sid).nil?
+			@redis.set sid,msg
+			@redis.sadd msg,sid
+		end
 
-		@connectons[room_id] << {id: session_id, connection: ws_conn}
-		
-		return session_id
- 		#@redis.lpush 1,"{id:4, name:test2}"
+		@channel.push msg
 	end
 
-	def connection_response(ws_conn, message)
-		
+	def msg_response(ws_conn, msg, sid)
+		(@redis.smembers msg).each do |id|
+			if id.to_i == sid then
+				ws_conn.send(msg)
+				break		
+			end
+		end	
 	end
 
-	def connection_close(ws_conn, message)
+	def msg_close(msg, sid)
+		room_id = @redis.get sid
 
+		@redis.del sid
+		@redis.srem room_id, sid
+
+		p "connection close!"
 	end
-
 end
 ChatServer.new.serverStart('localhost', 60000)
